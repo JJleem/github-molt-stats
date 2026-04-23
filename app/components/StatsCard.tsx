@@ -110,7 +110,7 @@ function Badge({ label }: { label: string }) {
 
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 export default function StatsCard(p: GitHubData) {
-  const { username, avatarUrl, commits, streak, stars, prs, langs } = p;
+  const { username, avatarUrl, commits, streak, stars, prs, langs, visitorToday, visitorTotal } = p;
 
   return (
     <div style={{
@@ -267,8 +267,18 @@ export default function StatsCard(p: GitHubData) {
               </div>
             ))}
           </div>
-          {/* 맨 밑: 서명 (marginTop 제거) */}
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          {/* 맨 밑: 방문자 + 서명 */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 10, color: T3, letterSpacing: 1, display: "flex" }}>VISITORS</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: HERO_COLOR, display: "flex" }}>
+                TODAY {visitorToday.toLocaleString()}
+              </span>
+              <span style={{ fontSize: 10, color: T3, display: "flex" }}>·</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: T2, display: "flex" }}>
+                TOTAL {visitorTotal.toLocaleString()}
+              </span>
+            </div>
             <span style={{
               fontSize: 10, fontWeight: 600, color: T3,
               letterSpacing: 2, display: "flex",

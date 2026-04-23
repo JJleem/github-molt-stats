@@ -1,8 +1,4 @@
-/**
- * GitHub GraphQL API — 실제 데이터 fetch
- * GITHUB_TOKEN 없으면 자동으로 MOCK_DATA fallback
- */
-
+import { redis } from "./redis";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -10,7 +6,7 @@ export interface Lang {
   name: string;
   percent: number;
   color: string;
-  end: string; // gradient end color
+  end: string;
 }
 
 export interface RecentRepo {
@@ -21,14 +17,16 @@ export interface RecentRepo {
 }
 
 export interface GitHubData {
-  username:    string;
-  avatarUrl:   string;
-  commits:     number;
-  streak:      number;
-  stars:       number;
-  prs:         number;
-  langs:       Lang[];
-  recentRepos: RecentRepo[];
+  username:     string;
+  avatarUrl:    string;
+  commits:      number;
+  streak:       number;
+  stars:        number;
+  prs:          number;
+  langs:        Lang[];
+  recentRepos:  RecentRepo[];
+  visitorToday: number;
+  visitorTotal: number;
 }
 
 // ── GraphQL 쿼리 ──────────────────────────────────────────────────────────────
@@ -37,8 +35,6 @@ const QUERY = `
   query($login: String!) {
     user(login: $login) {
       avatarUrl
-      
-      # 연도별 전체 기여 합산 (total contributions)으로 변경
       c2016: contributionsCollection(from: "2016-01-01T00:00:00Z", to: "2016-12-31T23:59:59Z") { contributionCalendar { totalContributions } }
       c2017: contributionsCollection(from: "2017-01-01T00:00:00Z", to: "2017-12-31T23:59:59Z") { contributionCalendar { totalContributions } }
       c2018: contributionsCollection(from: "2018-01-01T00:00:00Z", to: "2018-12-31T23:59:59Z") { contributionCalendar { totalContributions } }
@@ -50,8 +46,6 @@ const QUERY = `
       c2024: contributionsCollection(from: "2024-01-01T00:00:00Z", to: "2024-12-31T23:59:59Z") { contributionCalendar { totalContributions } }
       c2025: contributionsCollection(from: "2025-01-01T00:00:00Z", to: "2025-12-31T23:59:59Z") { contributionCalendar { totalContributions } }
       c2026: contributionsCollection(from: "2026-01-01T00:00:00Z", to: "2026-12-31T23:59:59Z") { contributionCalendar { totalContributions } }
-      
-      # streak 계산용 (올해 캘린더)
       contributionsCollection {
         contributionCalendar {
           weeks {
@@ -80,6 +74,7 @@ const QUERY = `
     }
   }
 `;
+
 // ── Gradient end 색상 매핑 ────────────────────────────────────────────────────
 
 const GRAD_MAP: Record<string, string> = {
@@ -106,22 +101,35 @@ function calcStreak(weeks: { contributionDays: { contributionCount: number }[] }
   let streak = 0;
   for (const d of days) {
     if (d.contributionCount > 0) streak++;
-    else if (streak === 0) continue; // 오늘 아직 커밋 없으면 어제부터 측정
+    else if (streak === 0) continue;
     else break;
   }
   return streak;
 }
 
+// ── Redis 캐시 로드 ───────────────────────────────────────────────────────────
+
+async function loadCachedData(): Promise<Omit<GitHubData, "visitorToday" | "visitorTotal"> | null> {
+  try {
+    const cached = await redis.get<Omit<GitHubData, "visitorToday" | "visitorTotal">>("github:data");
+    return cached ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
-export async function fetchGitHubData(): Promise<GitHubData> {
+export async function fetchGitHubData(visitorToday: number, visitorTotal: number): Promise<GitHubData> {
   const GH_TOKEN    = process.env.GITHUB_TOKEN;
-const GH_USERNAME = process.env.GITHUB_USERNAME ?? "JJleem";
-console.warn(GH_TOKEN)
+  const GH_USERNAME = process.env.GITHUB_USERNAME ?? "JJleem";
+
   if (!GH_TOKEN) {
-  
-    console.warn("[github] No GITHUB_TOKEN — using mock data");
-    return MOCK_DATA;
+    console.warn("[github] No GITHUB_TOKEN — trying Redis cache");
+    const cached = await loadCachedData();
+    return cached
+      ? { ...cached, visitorToday, visitorTotal }
+      : { ...MOCK_DATA, visitorToday, visitorTotal };
   }
 
   const res = await fetch("https://api.github.com/graphql", {
@@ -131,42 +139,42 @@ console.warn(GH_TOKEN)
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ query: QUERY, variables: { login: GH_USERNAME } }),
-    next: { revalidate: 3600 }, // 1시간 캐시
+    next: { revalidate: 3600 },
   });
- 
+
   if (!res.ok) {
     console.error("[github] API error:", res.status);
-    return MOCK_DATA;
+    const cached = await loadCachedData();
+    return cached
+      ? { ...cached, visitorToday, visitorTotal }
+      : { ...MOCK_DATA, visitorToday, visitorTotal };
   }
 
   const json = await res.json();
   if (json.errors) {
     console.error("[github] GraphQL errors:", json.errors);
-    return MOCK_DATA;
+    const cached = await loadCachedData();
+    return cached
+      ? { ...cached, visitorToday, visitorTotal }
+      : { ...MOCK_DATA, visitorToday, visitorTotal };
   }
 
   const u = json.data.user;
 
-  // ── commits (전체 연도 합산) ──
-// ── 전체 기여도 합산 ──
   const commits: number = [
     "c2016","c2017","c2018","c2019","c2020",
     "c2021","c2022","c2023","c2024","c2025","c2026",
   ].reduce((sum, key) => sum + (u[key]?.contributionCalendar?.totalContributions ?? 0), 0);
-console.log(commits)
-  // ── streak ──
+
   const streak = calcStreak(u.contributionsCollection.contributionCalendar.weeks);
 
-  // ── stars ──
   const stars: number = u.repositories.nodes.reduce(
     (acc: number, r: { stargazerCount: number }) => acc + r.stargazerCount,
     0
   );
 
-  // ── PRs ──
   const prs: number = u.pullRequests.totalCount;
 
-  // ── languages ──
   const sizeMap: Record<string, { size: number; color: string }> = {};
   for (const repo of u.repositories.nodes) {
     for (const edge of repo.languages.edges) {
@@ -187,7 +195,6 @@ console.log(commits)
       end: gradEnd(name, color),
     }));
 
-  // ── recent repos ──
   const recentRepos: RecentRepo[] = u.repositories.nodes
     .slice(0, 4)
     .map((r: { name: string; primaryLanguage?: { name: string; color: string }; stargazerCount: number }) => ({
@@ -199,18 +206,23 @@ console.log(commits)
 
   const avatarUrl: string = u.avatarUrl ?? `https://github.com/${GH_USERNAME}.png`;
 
-  return { username: GH_USERNAME, avatarUrl, commits, streak, stars, prs, langs, recentRepos };
+  const coreData = { username: GH_USERNAME, avatarUrl, commits, streak, stars, prs, langs, recentRepos };
+
+  // 성공 시 Redis에 저장 (7일 TTL)
+  redis.set("github:data", JSON.stringify(coreData), { ex: 60 * 60 * 24 * 7 }).catch(() => {});
+
+  return { ...coreData, visitorToday, visitorTotal };
 }
 
 // ── Mock fallback ─────────────────────────────────────────────────────────────
 
-export const MOCK_DATA: GitHubData = {
+export const MOCK_DATA = {
   username:  "JJleem",
   avatarUrl: "https://github.com/JJleem.png",
   commits:   2048,
-  streak:   47,
-  stars:    312,
-  prs:      89,
+  streak:    47,
+  stars:     312,
+  prs:       89,
   langs: [
     { name: "TypeScript", percent: 52, color: "#3178C6", end: "#38bdf8" },
     { name: "Python",     percent: 24, color: "#4B8BBE", end: "#a78bfa" },
