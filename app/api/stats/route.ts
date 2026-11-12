@@ -2,109 +2,80 @@ import satori from "satori";
 import { createElement } from "react";
 import { readFileSync } from "fs";
 import { join } from "path";
-import StatsCard from "@/app/components/StatsCard";
-import { fetchGitHubData, MOCK_DATA } from "@/lib/github";
-import { redis } from "@/lib/redis";
+import { after, type NextRequest } from "next/server";
+import StatsCard, { CARD_HEIGHT, CARD_WIDTH, type ThemeName } from "@/app/components/StatsCard";
+import { withOverlay } from "@/app/components/overlay";
+import { EMPTY_DATA, loadStats } from "@/lib/github";
 
-const W = 900;
-const H = 560;
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
-let _r: ArrayBuffer | null = null;
-let _b: ArrayBuffer | null = null;
+// ── 폰트 (인스턴스당 한 번만 로드) ────────────────────────────────────────────
 
-function loadFont(f: string): ArrayBuffer {
-  const buf = readFileSync(
-    join(process.cwd(), "node_modules/@fontsource/jetbrains-mono/files", f)
-  );
+// 폰트는 node_modules에서 직접 읽습니다 (next.config.ts의 outputFileTracingIncludes로 번들 포함 보장).
+const FONT_DIR = join(process.cwd(), "node_modules/@fontsource");
+
+function read(path: string): ArrayBuffer {
+  const buf = readFileSync(path);
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 }
 
-function getFonts() {
-  if (!_r) _r = loadFont("jetbrains-mono-latin-400-normal.woff");
-  if (!_b) _b = loadFont("jetbrains-mono-latin-700-normal.woff");
-  return { r: _r, b: _b };
+type Fonts = { name: string; data: ArrayBuffer; weight: 400 | 500 | 600; style: "normal" }[];
+let fonts: Fonts | null = null;
+
+function getFonts(): Fonts {
+  fonts ??= [
+    { name: "Geist", data: read(join(FONT_DIR, "geist-sans/files/geist-sans-latin-400-normal.woff")), weight: 400, style: "normal" },
+    { name: "Geist", data: read(join(FONT_DIR, "geist-sans/files/geist-sans-latin-500-normal.woff")), weight: 500, style: "normal" },
+    { name: "Geist", data: read(join(FONT_DIR, "geist-sans/files/geist-sans-latin-600-normal.woff")), weight: 600, style: "normal" },
+    { name: "Geist Mono", data: read(join(FONT_DIR, "geist-mono/files/geist-mono-latin-400-normal.woff")), weight: 400, style: "normal" },
+    { name: "Geist Mono", data: read(join(FONT_DIR, "geist-mono/files/geist-mono-latin-500-normal.woff")), weight: 500, style: "normal" },
+  ];
+  return fonts;
 }
 
-const CSS = `
-  @keyframes fillBar {
-    from { transform: scaleX(0); transform-origin: left center; }
-    to   { transform: scaleX(1); transform-origin: left center; }
-  }
-  .bar-0 { animation: fillBar 0.7s cubic-bezier(0.22,1,0.36,1) 0.00s both; }
-  .bar-1 { animation: fillBar 0.7s cubic-bezier(0.22,1,0.36,1) 0.14s both; }
-  .bar-2 { animation: fillBar 0.7s cubic-bezier(0.22,1,0.36,1) 0.28s both; }
-  .bar-3 { animation: fillBar 0.7s cubic-bezier(0.22,1,0.36,1) 0.42s both; }
+// ── 응답 ──────────────────────────────────────────────────────────────────────
 
-  @keyframes statPop {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0);   }
-  }
-  .stat-num { animation: statPop 0.5s cubic-bezier(0.22,1,0.36,1) 0.1s both; }
-`;
-
-function enhance(raw: string): string {
-  return raw.replace(/(<svg[^>]*>)/, `$1<style>${CSS}</style>`);
+function svgResponse(svg: string): Response {
+  return new Response(svg, {
+    // 항상 200 — GitHub camo 프록시는 에러 응답을 엑박으로 표시합니다.
+    status: 200,
+    headers: {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      // 방문자 수가 매 조회마다 갱신되도록 프록시 캐시를 막습니다.
+      "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+    },
+  });
 }
 
-function satoriOptions(r: ArrayBuffer, b: ArrayBuffer) {
-  return {
-    width: W, height: H,
-    fonts: [
-      { name: "JetBrains Mono", data: r, weight: 400 as const, style: "normal" as const },
-      { name: "JetBrains Mono", data: b, weight: 700 as const, style: "normal" as const },
-    ],
-  };
+function plainFallback(theme: ThemeName): string {
+  const [bg, fg] = theme === "light" ? ["#FFFFFF", "#52525B"] : ["#09090B", "#A1A1AA"];
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_WIDTH}" height="${CARD_HEIGHT}" viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}">
+  <rect width="${CARD_WIDTH}" height="${CARD_HEIGHT}" rx="24" fill="${bg}"/>
+  <text x="${CARD_WIDTH / 2}" y="${CARD_HEIGHT / 2}" fill="${fg}" font-size="14" font-family="ui-monospace, monospace" text-anchor="middle">Stats are warming up. Please refresh in a moment.</text>
+</svg>`;
 }
 
-export async function GET() {
-  const today = new Date().toISOString().slice(0, 10);
+export async function GET(request: NextRequest) {
+  const theme: ThemeName = request.nextUrl.searchParams.get("theme") === "light" ? "light" : "dark";
 
   try {
-    const { r, b } = getFonts();
-
-    // 방문자 카운트 + GitHub 데이터 병렬 처리
-    const [visitorTotal, visitorToday] = await Promise.all([
-      redis.incr("visits:total"),
-      redis.incr(`visits:${today}`),
-    ]);
-
-    const data = await fetchGitHubData(visitorToday, visitorTotal);
-
-    const raw = await satori(createElement(StatsCard, data), satoriOptions(r, b));
-
-    return new Response(enhance(raw), {
-      status: 200,
-      headers: {
-        "Content-Type":  "image/svg+xml",
-        "Cache-Control": "public, max-age=0, stale-while-revalidate=300",
-      },
+    const { data, visitors, refresh } = await loadStats().catch((err) => {
+      console.error("[/api/stats] loadStats failed:", err);
+      return { data: EMPTY_DATA, visitors: null, refresh: null };
     });
-  } catch (err) {
-    console.error("[/api/stats]", err);
 
-    // 항상 200 반환 — GitHub camo 프록시가 5xx를 캐시하면 엑박이 지속됨
-    try {
-      const { r, b } = getFonts();
-      const raw = await satori(
-        createElement(StatsCard, { ...MOCK_DATA, visitorToday: 0, visitorTotal: 0 }),
-        satoriOptions(r, b),
-      );
-      return new Response(enhance(raw), {
-        status: 200,
-        headers: {
-          "Content-Type":  "image/svg+xml",
-          "Cache-Control": "no-store",
-        },
-      });
-    } catch {
-      // Satori 자체가 실패한 최후의 경우 — 전체 사이즈 SVG로 200 반환
-      return new Response(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-          <rect width="${W}" height="${H}" fill="#0F111A" rx="24"/>
-          <text x="450" y="260" fill="#6CABDD" font-size="14" font-family="monospace" text-anchor="middle">잠시 후 다시 시도해주세요</text>
-        </svg>`,
-        { status: 200, headers: { "Content-Type": "image/svg+xml", "Cache-Control": "no-store" } }
-      );
-    }
+    // GitHub API 갱신은 응답을 보낸 뒤에 실행 — 요청 경로를 느리게 만들지 않습니다.
+    if (refresh) after(refresh);
+
+    const svg = await satori(createElement(StatsCard, { data, visitors, theme }), {
+      width: CARD_WIDTH,
+      height: CARD_HEIGHT,
+      fonts: getFonts(),
+    });
+    return svgResponse(withOverlay(svg, data, theme));
+  } catch (err) {
+    console.error("[/api/stats] render failed:", err);
+    return svgResponse(plainFallback(theme));
   }
 }

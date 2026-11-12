@@ -1,48 +1,41 @@
+const PREVIEWS = [
+  { theme: "dark", label: "GitHub dark", background: "#0d1117", color: "#8b949e" },
+  { theme: "light", label: "GitHub light", background: "#ffffff", color: "#59636e" },
+] as const;
+
 export default function Home() {
   return (
-    <main style={{
-      minHeight: "100vh",
-      // GitHub 다크모드 색상으로 미리보기 — 실제 환경 시뮬레이션
-      background: "#0d1117",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 32,
-      padding: 48,
-    }}>
-      {/* GitHub 다크모드 위에서 확인 */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/api/stats"
-        alt="MOLT GitHub Stats"
-        width={900}
-        height={480}
-        style={{ borderRadius: 20, maxWidth: "100%" }}
-      />
-
-      {/* GitHub 라이트모드 시뮬레이션 */}
-      <div style={{
-        background: "#ffffff",
-        padding: 24,
-        borderRadius: 12,
-        width: "100%",
-        maxWidth: 900,
-        boxSizing: "border-box" as const,
-      }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/api/stats"
-          alt="MOLT GitHub Stats"
-          width={900}
-          height={560}
-          style={{ borderRadius: 20, maxWidth: "100%", display: "block" }}
-        />
-      </div>
-
-      <a href="/api/stats" style={{ fontSize: 10, color: "#444", textDecoration: "none" }}>
-        /api/stats
-      </a>
+    <main style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {PREVIEWS.map(({ theme, label, background, color }) => (
+        <section
+          key={theme}
+          style={{
+            flex: 1,
+            background,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 16,
+            padding: "48px 24px",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/stats?theme=${theme}`}
+            alt={`GitHub stats card, ${theme} theme`}
+            width={900}
+            height={520}
+            style={{ maxWidth: "100%", height: "auto" }}
+          />
+          <a
+            href={`/api/stats?theme=${theme}`}
+            style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color, textDecoration: "none" }}
+          >
+            {label} · /api/stats?theme={theme}
+          </a>
+        </section>
+      ))}
     </main>
   );
 }

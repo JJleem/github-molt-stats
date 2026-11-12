@@ -1,295 +1,322 @@
 /**
- * StatsCard v3.2 — Premium, Witty & Philosophy
+ * StatsCard v4 — bento 레이아웃, 라이트/다크 테마
  *
- * 고급스러운 딥 슬레이트(Deep Slate) 배경 + 스카이블루 포인트
- * 하단에 개인 슬로건 추가로 브랜딩 강화
+ * Satori로 렌더링되므로 flexbox만 사용하고, 자식이 여럿인 요소는 display:flex가 필요합니다.
  */
 
-import type { GitHubData } from "@/lib/github";
-export type { GitHubData as StatsCardProps };
+import type { CSSProperties, ReactNode } from "react";
+import type { GitHubStats, Visitors } from "@/lib/github";
+import { PROFILE } from "@/lib/config";
 
-// ── 플랫폼 아이콘 (Inline SVG 컴포넌트) ──────────────────────────────────────
-function GithubIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="#94A3B8" width="15" height="15" style={{ display: "flex" }}>
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-    </svg>
-  );
+export const CARD_WIDTH = 900;
+export const CARD_HEIGHT = 520;
+
+export type ThemeName = "dark" | "light";
+
+export interface StatsCardProps {
+  data: GitHubStats;
+  visitors: Visitors | null;
+  theme: ThemeName;
 }
 
-function VelogIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="15" height="15" style={{ display: "flex", borderRadius: "3px" }}>
-      <rect width="36" height="36" rx="8" fill="#20c997"/>
-      <path fill="white" d="M9 10h5l4 11 4-11h5L18 26z"/>
-    </svg>
-  );
+// ── 테마 ──────────────────────────────────────────────────────────────────────
+
+export interface Theme {
+  page: string;
+  /** 칸 배경. 뒤의 픽셀 물결이 은은하게 비치도록 반투명입니다. */
+  cell: string;
+  border: string;
+  t1: string;
+  t2: string;
+  t3: string;
+  accent: string;
+  /** 히트맵 레벨 0~4 */
+  heat: [string, string, string, string, string];
+  track: string;
 }
 
-// ── 프리미엄 컬러 팔레트 ────────────────────────────────────────────────────
-const BG     = "#0F111A"; 
-const BORDER = "rgba(255,255,255,0.06)";
-const T1     = "#F8FAFC"; 
-const T2     = "#94A3B8";
-const T3     = "#64748B";
+export const THEMES: Record<ThemeName, Theme> = {
+  dark: {
+    page: "#09090B",
+    cell: "rgba(18,18,21,0.6)",
+    border: "rgba(255,255,255,0.08)",
+    t1: "#FAFAFA",
+    t2: "#A1A1AA",
+    t3: "#71717A",
+    accent: "#6CABDD",
+    heat: [
+      "rgba(255,255,255,0.06)",
+      "rgba(108,171,221,0.30)",
+      "rgba(108,171,221,0.52)",
+      "rgba(108,171,221,0.76)",
+      "#6CABDD",
+    ],
+    track: "rgba(255,255,255,0.06)",
+  },
+  light: {
+    page: "#FFFFFF",
+    cell: "rgba(247,247,248,0.62)",
+    border: "rgba(9,9,11,0.09)",
+    t1: "#09090B",
+    t2: "#52525B",
+    t3: "#8A8A93",
+    accent: "#2477BF",
+    heat: [
+      "rgba(9,9,11,0.06)",
+      "rgba(36,119,191,0.28)",
+      "rgba(36,119,191,0.50)",
+      "rgba(36,119,191,0.75)",
+      "#2477BF",
+    ],
+    track: "rgba(9,9,11,0.06)",
+  },
+};
 
-const HERO_COLOR = "#6CABDD"; 
+const SANS = "Geist";
+const MONO = "Geist Mono";
+export const PAD = 20;
+export const GAP = 12;
+export const CELL_PAD = 22;
+export const SIDE_WIDTH = 300;
+export const TOP_ROW_HEIGHT = 216;
+export const HEAT_WEEKS = 38;
+/** 기여 셀 안쪽 폭: 카드 폭 - 좌우 여백 - 프로필 셀 - 간격 - 셀 패딩 - 테두리(카드·셀) */
+export const HEAT_WIDTH = CARD_WIDTH - PAD * 2 - SIDE_WIDTH - GAP - CELL_PAD * 2 - 4;
+export const HEAT_HEIGHT = 88;
 
-const BADGE_ROWS = [
-  ["Next.js", "React", "TypeScript"],
-  ["FastAPI", "Claude API"],
-  ["Python", "Rust", "Tauri"],
-];
+const num = (n: number) => n.toLocaleString("en-US");
 
-// ── 서포팅 스탯 ─────────────────────────────────────────────────────────────
-function Stat({ val, label, color }: { val: string; label: string; color: string }) {
+// ── 조각들 ────────────────────────────────────────────────────────────────────
+
+function Cell({ t, style, children }: { t: Theme; style?: CSSProperties; children: ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{
-        fontSize: 26, fontWeight: 800,
-        color, lineHeight: 1, letterSpacing: "-0.5px",
-      }}>
-        {val}
-      </span>
-      <span style={{ fontSize: 10, color: T3, letterSpacing: 2, fontWeight: 600 }}>
-        {label}
-      </span>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        background: t.cell,
+        border: `1px solid ${t.border}`,
+        borderRadius: 16,
+        padding: CELL_PAD,
+        ...style,
+      }}
+    >
+      {children}
     </div>
   );
 }
 
-// ── 언어 바 ───────────────────────────────────────────────────────────────────
-function LangRow({
-  lang, idx,
-}: {
-  lang: { name: string; percent: number; color: string; end: string };
-  idx: number;
-}) {
+function Label({ t, children }: { t: Theme; children: ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <div style={{
-        width: 8, height: 8, borderRadius: "50%",
-        background: lang.color, flexShrink: 0, display: "flex",
-        boxShadow: `0 0 6px ${lang.color}40`, 
-      }} />
-      <span style={{ fontSize: 12, fontWeight: 500, color: T1, width: 84, flexShrink: 0 }}>{lang.name}</span>
-      <div style={{
-        flex: 1, height: 6,
-        background: "rgba(255,255,255,0.05)",
-        borderRadius: 99, display: "flex", overflow: "hidden",
-      }}>
-        <div
-          style={{
-            height: "100%", width: `${lang.percent}%`,
-            background: `linear-gradient(90deg, ${lang.color}, ${lang.end})`,
-            borderRadius: 99, display: "flex",
-          }}
-        />
+    <span
+      style={{
+        display: "flex",
+        fontFamily: MONO,
+        fontSize: 10.5,
+        fontWeight: 500,
+        letterSpacing: 1.2,
+        color: t.t3,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Avatar({ t, src }: { t: Theme; src: string | null }) {
+  const size = 52;
+  if (!src) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          background: t.accent,
+          color: t.page,
+          fontSize: 24,
+          fontWeight: 600,
+          flexShrink: 0,
+        }}
+      >
+        {PROFILE.displayName.slice(0, 1)}
       </div>
-      <span style={{ fontSize: 12, fontWeight: 700, color: T2, width: 34, flexShrink: 0, textAlign: "right" }}>
-        {lang.percent}%
-      </span>
-    </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      width={size}
+      height={size}
+      style={{ borderRadius: size / 2, flexShrink: 0 }}
+    />
   );
 }
 
-// ── 뱃지 ────────────────────────────────────────────────────────────
-function Badge({ label }: { label: string }) {
+function Profile({ t, data }: { t: Theme; data: GitHubStats }) {
   return (
-    <div style={{
-      display: "flex", padding: "6px 14px",
-      background: "rgba(255,255,255,0.03)",
-      border: `1px solid ${BORDER}`,
-      borderRadius: 8, 
-      fontSize: 11, fontWeight: 500, color: T2,
-    }}>
-      {label}
-    </div>
+    <Cell t={t} style={{ width: SIDE_WIDTH, flexShrink: 0, justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <Avatar t={t} src={data.avatar} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <span style={{ display: "flex", fontSize: 22, fontWeight: 600, color: t.t1, letterSpacing: -0.6, lineHeight: 1 }}>
+            {PROFILE.displayName}
+          </span>
+          <span style={{ display: "flex", fontFamily: MONO, fontSize: 12, color: t.t3, lineHeight: 1 }}>
+            @{data.username}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <span style={{ display: "flex", fontSize: 14, fontWeight: 500, color: t.accent }}>{PROFILE.role}</span>
+        <span style={{ display: "flex", fontSize: 12.5, color: t.t2, lineHeight: 1.45 }}>{PROFILE.slogan}</span>
+      </div>
+
+    </Cell>
+  );
+}
+
+function Contributions({ t, data }: { t: Theme; data: GitHubStats }) {
+  return (
+    <Cell t={t} style={{ flex: 1, justifyContent: "space-between" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Label t={t}>TOTAL CONTRIBUTIONS</Label>
+          <span style={{ display: "flex", fontSize: 54, fontWeight: 600, color: t.t1, letterSpacing: -2.4, lineHeight: 1 }}>
+            {num(data.totalContributions)}
+          </span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+          <Label t={t}>LAST 12 MONTHS</Label>
+          <span style={{ display: "flex", fontSize: 22, fontWeight: 600, color: t.accent, letterSpacing: -0.6, lineHeight: 1 }}>
+            {num(data.lastYearContributions)}
+          </span>
+        </div>
+      </div>
+      {/* 히트맵 자리 — 애니메이션이 필요해서 Satori 밖(app/components/overlay.ts)에서 그립니다. */}
+      <div style={{ display: "flex", height: HEAT_HEIGHT }} />
+    </Cell>
+  );
+}
+
+function Stat({ t, label, value, unit }: { t: Theme; label: string; value: string; unit?: string }) {
+  return (
+    <Cell t={t} style={{ flex: 1, padding: "16px 20px", justifyContent: "space-between" }}>
+      <Label t={t}>{label}</Label>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <span style={{ display: "flex", fontSize: 28, fontWeight: 600, color: t.t1, letterSpacing: -1, lineHeight: 1 }}>
+          {value}
+        </span>
+        {unit ? (
+          <span style={{ display: "flex", fontSize: 12, color: t.t3, lineHeight: 1 }}>{unit}</span>
+        ) : null}
+      </div>
+    </Cell>
+  );
+}
+
+function Languages({ t, data }: { t: Theme; data: GitHubStats }) {
+  return (
+    <Cell t={t} style={{ flex: 1, justifyContent: "space-between" }}>
+      <Label t={t}>TOP LANGUAGES</Label>
+      <div style={{ display: "flex", gap: 3, height: 12 }}>
+        {data.langs.length === 0 ? (
+          <div style={{ display: "flex", flex: 1, borderRadius: 4, background: t.track }} />
+        ) : (
+          data.langs.map((lang) => (
+            <div
+              key={lang.name}
+              style={{ display: "flex", flexGrow: Math.max(lang.percent, 1.5), flexBasis: 0, borderRadius: 4, background: lang.color }}
+            />
+          ))
+        )}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", columnGap: 14, rowGap: 10 }}>
+        {data.langs.map((lang) => (
+          <div key={lang.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", width: 8, height: 8, borderRadius: 4, background: lang.color }} />
+            <span style={{ display: "flex", fontSize: 12, fontWeight: 500, color: t.t1, lineHeight: 1 }}>{lang.name}</span>
+            <span style={{ display: "flex", fontFamily: MONO, fontSize: 11, color: t.t3, lineHeight: 1 }}>
+              {lang.percent < 1 ? "<1" : Math.round(lang.percent)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </Cell>
+  );
+}
+
+function RecentRepos({ t, data }: { t: Theme; data: GitHubStats }) {
+  const clip = (name: string) => (name.length > 24 ? `${name.slice(0, 23)}…` : name);
+  return (
+    <Cell t={t} style={{ width: SIDE_WIDTH, flexShrink: 0, justifyContent: "space-between" }}>
+      <Label t={t}>RECENTLY ACTIVE</Label>
+      <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+        {data.recentRepos.map((repo) => (
+          <div key={repo.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", width: 8, height: 8, borderRadius: 4, background: repo.color }} />
+              <span style={{ display: "flex", fontSize: 12.5, fontWeight: 500, color: t.t1, lineHeight: 1 }}>
+                {clip(repo.name)}
+              </span>
+            </div>
+            {repo.lang ? (
+              <span style={{ display: "flex", fontFamily: MONO, fontSize: 11, color: t.t3, lineHeight: 1 }}>
+                {repo.lang}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </Cell>
   );
 }
 
 // ── 메인 ─────────────────────────────────────────────────────────────────────
-export default function StatsCard(p: GitHubData) {
-  const { username, avatarUrl, commits, streak, stars, prs, langs, visitorToday, visitorTotal } = p;
 
+export default function StatsCard({ data, visitors, theme }: StatsCardProps) {
+  const t = THEMES[theme];
   return (
-    <div style={{
-      display: "flex", flexDirection: "column",
-      width: 900, height: 560,
-      background: BG,
-      border: `1px solid ${BORDER}`,
-      borderRadius: 24, 
-      overflow: "hidden",
-      boxShadow: "0 20px 40px rgba(0,0,0,0.2)", 
-    }}>
-
-      {/* ── 상단: 프로필 + 스탯 계층 ────────────────────────────────────────── */}
-      <div style={{
-        display: "flex", flexDirection: "row",
-        flex: 1,
-        padding: "44px 52px 36px",
-        gap: 52,
-      }}>
-
-        {/* 프로필 */}
-        <div style={{
-          display: "flex", flexDirection: "column",
-          width: 200, flexShrink: 0,
-        }}>
-          {/* 아바타 (두께감 + 고대비 그라데이션 + 글로우 효과) */}
-          <div style={{
-            width: 92, height: 92, borderRadius: "50%",
-            background: "linear-gradient(135deg, #00F2FE 0%, #4FACFE 50%, #6366F1 100%)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            marginBottom: 20, flexShrink: 0,
-            boxShadow: "0 0 16px rgba(79, 172, 254, 0.4)", 
-          }}>
-            <img
-              src={avatarUrl}
-              width={78} height={78} 
-              style={{ 
-                borderRadius: "50%", 
-                display: "flex", 
-                border: `3px solid ${BG}` 
-              }}
-            />
-          </div>
-
-          <span style={{
-            fontSize: 24, fontWeight: 800, color: T1,
-            lineHeight: 1, marginBottom: 8, display: "flex", letterSpacing: "-0.5px",
-            alignItems:"center", gap: 8
-          }}>
-            Molt<span style={{ fontSize: 13, fontWeight: 500, color: HERO_COLOR, display: "flex" }}>
-           {username} 
-          </span>
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 500, color: HERO_COLOR, marginBottom: 24, display: "flex" }}>
-            AI Application Engineer
-          </span>
-
-         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {[
-              { Icon: GithubIcon, label: "github.com/JJleem" },
-              { Icon: VelogIcon,  label: "velog.io/@jjleem"  },
-            ].map(({ Icon, label }) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Icon /> 
-                <span style={{ fontSize: 12, fontWeight: 500, color: T3, display: "flex" }}>{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── 스탯: 위계 구조 ─────────────────────────────────────────────── */}
-        <div style={{
-          flex: 1,
-          display: "flex", flexDirection: "column",
-          justifyContent: "center",
-          gap: 24,
-        }}>
-
-          {/* Hero — commits */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{
-              fontSize: 64, fontWeight: 800,
-              color: T1, lineHeight: 1, letterSpacing: "-1.5px"
-            }}>
-              {commits.toLocaleString()}
-            </span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: HERO_COLOR, letterSpacing: 3 }}>
-              TOTAL CONTRIBUTIONS
-            </span>
-          </div>
-
-          {/* 가로선 */}
-          <div style={{ height: 1, background: BORDER, display: "flex" }} />
-
-          {/* Supporting — streak / stars / prs */}
-          <div style={{ display: "flex", gap: 48 }}>
-            <Stat val={`${streak}d`}    label="STREAK"        color="#F472B6" />
-            <Stat val={String(stars)}   label="STARS"         color="#FBBF24" />
-            <Stat val={String(prs)}     label="PULL REQUESTS" color="#34D399" />
-          </div>
-
-        </div>
-
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
+        padding: PAD,
+        gap: GAP,
+        // 카드 배경·테두리는 overlay.ts에서 그립니다 (픽셀 물결을 칸들 뒤에 깔기 위해).
+        // 투명 테두리는 안쪽 좌표를 유지하기 위한 자리입니다.
+        border: "1px solid transparent",
+        fontFamily: SANS,
+        color: t.t1,
+      }}
+    >
+      <div style={{ display: "flex", gap: GAP, height: TOP_ROW_HEIGHT }}>
+        <Profile t={t} data={data} />
+        <Contributions t={t} data={data} />
       </div>
 
-      {/* ── 가로 구분선 ─────────────────────────────────────────────────────── */}
-      <div style={{ height: 1, background: BORDER, margin: "0 52px", display: "flex" }} />
-
-    {/* ── 하단: 언어 | 스택 | 슬로건 ────────────────────────────────────── */}
-      <div style={{
-        display: "flex", flexDirection: "row",
-        padding: "24px 52px 28px",
-        flex: 1, // 남은 세로 공간을 확실하게 차지하도록 설정
-      }}>
-
-        {/* 언어 바 + 슬로건 (Left) */}
-        <div style={{
-          flex: 1,
-          display: "flex", flexDirection: "column",
-          justifyContent: "space-between", // 💡 flex: 1 래퍼를 지우고 양끝 정렬로 겹침 방지
-          paddingRight: 32,
-        }}>
-          {/* 언어 리스트 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {langs.slice(0, 4).map((l, i) => (
-              <LangRow key={l.name} lang={l} idx={i} />
-            ))}
-          </div>
-          {/* 맨 밑: 슬로건 (marginTop 제거) */}
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <span style={{ color: HERO_COLOR, fontSize: 14, fontWeight: 700, marginRight: 6, display: "flex" }}>"</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: T2, letterSpacing: 1, display: "flex" }}>
-              AI empowers humans beyond their limits.
-            </span>
-            <span style={{ color: HERO_COLOR, fontSize: 14, fontWeight: 700, marginLeft: 6, display: "flex" }}>"</span>
-          </div>
-        </div>
-
-        {/* 세로 구분선 */}
-        <div style={{ width: 1, background: BORDER, display: "flex", alignSelf: "stretch" }} />
-
-        {/* 스택 뱃지 + 서명 (Right) */}
-        <div style={{
-          width: 320, flexShrink: 0,
-          display: "flex", flexDirection: "column",
-          justifyContent: "space-between", // 💡 여기도 양끝 정렬
-          paddingLeft: 32,
-        }}>
-          {/* 뱃지 리스트 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {BADGE_ROWS.map((row, ri) => (
-              <div key={ri} style={{ display: "flex", gap: 8 }}>
-                {row.map((s) => <Badge key={s} label={s} />)}
-              </div>
-            ))}
-          </div>
-          {/* 맨 밑: 방문자 + 서명 */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 10, color: T3, letterSpacing: 1, display: "flex" }}>VISITORS</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: HERO_COLOR, display: "flex" }}>
-                TODAY {visitorToday.toLocaleString()}
-              </span>
-              <span style={{ fontSize: 10, color: T3, display: "flex" }}>·</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: T2, display: "flex" }}>
-                TOTAL {visitorTotal.toLocaleString()}
-              </span>
-            </div>
-            <span style={{
-              fontSize: 10, fontWeight: 600, color: T3,
-              letterSpacing: 2, display: "flex",
-            }}>
-              CRAFTED BY MOLT
-            </span>
-          </div>
-        </div>
-
+      <div style={{ display: "flex", gap: GAP, height: 88 }}>
+        <Stat t={t} label="CURRENT STREAK" value={num(data.streak)} unit={data.streak === 1 ? "day" : "days"} />
+        <Stat t={t} label="STARS EARNED" value={num(data.stars)} />
+        <Stat t={t} label="MERGED PRS" value={num(data.prs)} />
+        <Stat
+          t={t}
+          label="VISITORS TODAY"
+          value={visitors ? num(visitors.today) : "—"}
+          unit={visitors ? `/ ${num(visitors.total)} total` : undefined}
+        />
       </div>
 
+      <div style={{ display: "flex", gap: GAP, flex: 1 }}>
+        <Languages t={t} data={data} />
+        <RecentRepos t={t} data={data} />
+      </div>
     </div>
   );
 }
