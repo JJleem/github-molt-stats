@@ -17,7 +17,6 @@ Next.js App Router + Satori로 SVG를 서버 사이드 렌더링하며, GitHub G
 - **Visitors** — 오늘 / 누적 조회 수 (Upstash Redis)
 - **Top Languages** — 코드 사이즈 기반 상위 5개 언어
 - **Recently Active** — 최근 푸시한 공개 레포 3개
-- **픽셀 물결 배경** — 잔디 모양 격자 뒤로 물결이 흐르는 애니메이션 (README 안에서도 재생)
 - **라이트 / 다크 테마** — `?theme=light` · `?theme=dark` (기본값)
 - GITHUB_TOKEN 없을 때 Mock 데이터로 자동 fallback (로컬 디자인 확인용)
 
@@ -111,7 +110,7 @@ npm run dev
 |------|------|
 | `lib/config.ts` | 이름, 직함, 슬로건, 집계 시작 연도 |
 | `app/components/StatsCard.tsx` | 카드 디자인 (테마 색상, 레이아웃) |
-| `app/components/overlay.ts` | 배경 픽셀 물결(속도·진하기), 기여 히트맵 |
+| `app/components/overlay.ts` | 카드 배경·테두리, 기여 히트맵 |
 | `lib/github.ts` | GraphQL 쿼리, 스냅샷 캐시, Mock 데이터 |
 | `app/api/stats/route.ts` | SVG 렌더링, 응답 헤더 |
 

@@ -23,7 +23,6 @@ export interface StatsCardProps {
 
 export interface Theme {
   page: string;
-  /** 칸 배경. 뒤의 픽셀 물결이 은은하게 비치도록 반투명입니다. */
   cell: string;
   border: string;
   t1: string;
@@ -38,7 +37,7 @@ export interface Theme {
 export const THEMES: Record<ThemeName, Theme> = {
   dark: {
     page: "#09090B",
-    cell: "rgba(18,18,21,0.6)",
+    cell: "#121215",
     border: "rgba(255,255,255,0.08)",
     t1: "#FAFAFA",
     t2: "#A1A1AA",
@@ -55,7 +54,7 @@ export const THEMES: Record<ThemeName, Theme> = {
   },
   light: {
     page: "#FFFFFF",
-    cell: "rgba(247,247,248,0.62)",
+    cell: "#F7F7F8",
     border: "rgba(9,9,11,0.09)",
     t1: "#09090B",
     t2: "#52525B",
@@ -197,7 +196,7 @@ function Contributions({ t, data }: { t: Theme; data: GitHubStats }) {
           </span>
         </div>
       </div>
-      {/* 히트맵 자리 — 애니메이션이 필요해서 Satori 밖(app/components/overlay.ts)에서 그립니다. */}
+      {/* 히트맵 자리 — SVG 용량을 줄이려고 Satori 밖(app/components/overlay.ts)에서 그립니다. */}
       <div style={{ display: "flex", height: HEAT_HEIGHT }} />
     </Cell>
   );
@@ -289,7 +288,7 @@ export default function StatsCard({ data, visitors, theme }: StatsCardProps) {
         height: CARD_HEIGHT,
         padding: PAD,
         gap: GAP,
-        // 카드 배경·테두리는 overlay.ts에서 그립니다 (픽셀 물결을 칸들 뒤에 깔기 위해).
+        // 카드 배경·테두리는 overlay.ts에서 그립니다.
         // 투명 테두리는 안쪽 좌표를 유지하기 위한 자리입니다.
         border: "1px solid transparent",
         fontFamily: SANS,
